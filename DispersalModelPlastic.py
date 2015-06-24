@@ -30,12 +30,12 @@ currents_data_dir = "/media/jwren/OfficeHD/HYCOM/globalHYCOM/100m/"
 output_prefix_daily = "/home/jwren/Desktop/PythonTest/Dispersal_python_8kmHA_test_site_"
 output_prefix_total = "/home/jwren/Desktop/PythonTest/Dispersal_python_8kmHA_test_total"
 
-maxPLD = 35
-minPLD = 10
+maxPLD = 5
+minPLD = 2
 arraystart = 122
-arrayend = 250
-ntotal = 10
-releasesites = 876
+arrayend = 130
+ntotal = 5
+releasesites = 687 
 londim = 501
 latdim = 376
 resolution= 0.08
@@ -67,7 +67,7 @@ def release(xlon, xlat, startday, uval, vval):
     xflag2 = False
     xflag3 = False
     global currentday  # added this so can use DAY when printing to file5 at end of script
-##### add if loop if smaller than 51 days, keep going, if larger then check with Settle after every day. 
+    '''add if loop if smaller than 51 days, keep going, if larger then check with Settle after every day. '''
     for day in xrange(1, maxPLD + 1):
         if day < minPLD:
             if xflag1 == False:
