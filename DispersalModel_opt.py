@@ -13,22 +13,6 @@ from random import seed, random
 # just to make sure we randomize the random function
 seed()
 
-
-# uses new code to replace bathy check with simple query of current field
-# uses newer bathy file from Johanna, does 5km radius, and skips days not of interest.
-# mod from goby1b, this does Ed's simulation, note the out of bounds settings were obsolete and wrong, no harm I think but cluttered screen bounds
-# mod from 1A, this is for MacPro desktop, check mem limits...
-# this does part of the second year...
-# modified from post-crash version of hycom4x.tru which came from MyBook...
-# This does goby simulation with streams source/sink
-# ============
-# tried 15km radius instead of "default" 25km
-# mod from hycom3.tru to look at additional years and use less diffusivity.
-# note the trajectory file has an additional record to indicate settled or not
-# Note that dimensioning and arraystart/arrayend values need updating if doing simulation for other time frames
-
-
-
 # DLS:
 # In many of the for loops, when we define a range, we are adding 1 to the end of the range.
 # This is due to python not including the final value in the range [n, x) .  To match what the original  
@@ -88,9 +72,9 @@ def disperse(xlon, xlat, currentday, uval, vval):
     hycomv = 0
     zloncm, zlatcm = calculateLonLatCM(abs(xlat))
 
-    nnlon = int(round( ((xlon - 194.0) / 0.04), 0)) + 1
-    nnlat = int(round( ((xlat - 16.0) / 0.04), 0))  + 1
-    if (1 <= nnlon <= 401) and (1 <= nnlat <= 251):
+    nnlon = int(round( ((xlon - args.lonmin) / args.resolution), 0)) + 1
+    nnlat = int(round( ((xlat - args.latmin) / args.resolution), 0))  + 1
+    if (1 <= nnlon <= args.londim) and (1 <= nnlat <= args.latdim):
         hycomu = uval[currentday][nnlon][nnlat]
         hycomv = vval[currentday][nnlon][nnlat]
         if hycomu != EVEL_NVEL_ERR:
@@ -118,15 +102,15 @@ def disperse(xlon, xlat, currentday, uval, vval):
 
 
 def checkbounds(xlon, xlat):
-    if xlat < 16.0 or xlat > 26.0 or xlon < 194.0 or xlon > 210.0:
+    if xlat < args.latmin or xlat > args.latmax or xlon < args.lonmin or xlon > args.latmax:
         return  True
     return False
 
 
 def checkdepth(xlon, xlat, currentday, uval, vval):
-    nnlon = int(round( ((xlon - 194.0) / 0.04), 0)) + 1
-    nnlat = int(round( ((xlat - 16.0) / 0.04), 0)) + 1
-    if 1 <= nnlon <= 401 and 1 <= nnlat <= 251:
+    nnlon = int(round( ((xlon - args.lonmin) / args.resolution), 0)) + 1
+    nnlat = int(round( ((xlat - args.latmin) / args.resolution), 0)) + 1
+    if 1 <= nnlon <= args.londim and 1 <= nnlat <= args.latdim:
         hycomu = uval[currentday][nnlon][nnlat]
         hycomv = vval[currentday][nnlon][nnlat]
         if hycomu == EVEL_NVEL_ERR or hycomv == EVEL_NVEL_ERR:
@@ -169,7 +153,7 @@ def settle(endlon, endlat, uval, vval, habilon, habilat):
     # When  xflag3 is false, dmindex is not needed in parent function
     dmin = 6  
     dmindex = None
-    for ijk in xrange(1, 302 + 1):
+    for ijk in xrange(1, args.habitat + 1):
         avglat = abs((endlat + habilat[ijk]) / 2.0)
         avglat2 = avglat**2
         avglat3 = avglat**3
@@ -241,16 +225,17 @@ def main(args):
     to modify the parameters, without having to modifying the code.
     """
 
-    uval = dict([ (y, [ [0.0]*(251 + 1) for x in xrange(401 + 1)], ) for y in xrange(args.arraystart, args.arrayend + 1) ])
-    vval = dict([ (y, [ [0.0]*(251 + 1) for x in xrange(401 + 1)], ) for y in xrange(args.arraystart, args.arrayend + 1) ])
-    habilon = [0.0]*(302 + 1) # 302
-    habilat = [0.0]*(302 + 1) # 302
-    island = [0.0]*(302 + 1) # 302 
+    uval = dict([ (y, [ [0.0]*(args.latdim + 1) for x in xrange(args.londim + 1)], ) for y in xrange(args.arraystart, args.arrayend + 1) ])
+    vval = dict([ (y, [ [0.0]*(args.latdim + 1) for x in xrange(args.londim + 1)], ) for y in xrange(args.arraystart, args.arrayend + 1) ])
+    habilon = [0.0]*(args.habitat + 1)
+    habilat = [0.0]*(args.habitat + 1)
+    island = [0.0]*(args.habitat + 1)
+    propreef = [0.0]*(args.habitat +1)
 
     print "Reading coastal fringe location file..."
     with open (args.locale) as file3:
-        for line, ijk in zip(file3, xrange(1, 302 + 1)):
-            habilon[ijk], habilat[ijk], island[ijk] = map(float, line.split(","))
+        for line, ijk in zip(file3, xrange(1, args.habitat + 1)):
+            habilon[ijk], habilat[ijk], propreef[ijk], island[ijk] = map(float, line.split(","))
 
     print "Reading and plotting Island data and EEZ data..."
     plotFigure(args.island, args.eez, "Island & EEZ Data", args.plot, args.output)
@@ -258,7 +243,7 @@ def main(args):
     myFile = {}
     print "Reading daily HYCOM currents..."
     with open(args.currents) as file1:
-        for line, ijk in zip(file1, xrange(122, 1095 + 1)):
+        for line, ijk in zip(file1, xrange(122, 2038 + 1)):
             #line = file1.readline()
             xfile = line.split(",")[0]
             if arraystart <= ijk <= arrayend:
@@ -279,19 +264,19 @@ def main(args):
             continue 
         with open(ufile) as file3:
             with open(vfile) as file4:
-                for j in xrange(251, 0, -1):
-                    for i in xrange(1, 401 + 1):
+                for j in xrange(1, args.latdim + 1):
+                    for i in xrange(1, args.londim + 1):
                         uval[ijk][i][j] = float(file3.readline())
                         vval[ijk][i][j] =  float(file4.readline())
     del myFile
 
     with open(args.output, 'w') as file2:
-        for startsite in xrange(1, 302 + 1):
+        for startsite in xrange(1, args.habitat + 1):
             print startsite
             startlon = habilon[startsite]
             startlat = habilat[startsite]
-            for startday in xrange(122, 580 + 1):
-                if (122 <= startday <= 212) or (486 <= startday <= 577) or (851 <= startday <= 942):
+            for startday in xrange(args.arraystart, args.arrayend + 1):
+                if (122 <= startday <= 212) or (486 <= startday <= 577) or (851 <= startday <= 942): # JLKW For seasonal release only. Can be commented out if releaseing year round. 
                     for nrun in xrange(args.runs): 
                         endlon, endlat = release(startlon, startlat, startday, uval, vval, args.duration)
                         xflag3, dmindex = settle(endlon, endlat, uval, vval, habilon, habilat)
@@ -308,10 +293,18 @@ def parseArgs(argv):
     parser.add_argument("-d", "--data", default = os.path.join(".","data"), help ="Directory path containing *_evel.dat and *_nvel.dat files", type = str)
     parser.add_argument("-o", "--output", required = True, help ="Output file", type = str)
 
-    parser.add_argument("-t", "--duration", default = 45, help ="How many days", type = int)
+    parser.add_argument("-t", "--duration", default = 45, help ="PLD in days", type = int)
     parser.add_argument("-s", "--arraystart", default = 122, help ="Start of analysis period", type = int)
     parser.add_argument("-n", "--arrayend", default = 626, help ="End of analysis period", type = int)
-    parser.add_argument("-r", "--runs", default = 1000, help ="Originally known as ntotal", type = int)
+    parser.add_argument("-r", "--runs", default = 100, help ="Particles released per site per day", type = int)
+    parser.add_argument("-h", "--habitat", required = True, help ="Number of habitat pixels", type = int) # JLKW added argument
+    parser.add_argument("-a", "--londim", required = True, help ="Longitude dimension", type = int)    # JLKW added argument
+    parser.add_argument("-b", "--latdim", required = True, help ="Latitude dimension", type = int)    # JLKW added argument
+    parser.add_argument("-f", "--lonmin", required = True, help ="Longitude min", type = int)    # JLKW added argument
+    parser.add_argument("-g", "--lonmax", required = True, help ="Longitude max", type = int)    # JLKW added argument
+    parser.add_argument("-j", "--latmin", required = True, help ="Latitude min", type = int)    # JLKW added argument
+    parser.add_argument("-k", "--latmax", required = True, help ="Latitude max", type = int)    # JLKW added argument
+    parser.add_argument("-m", "--resolution", required = True, help ="Resolution of current file in km", type = int)    # JLKW added argument (values are decimals, should type=float? 
 
     parser.add_argument("-p", "--plot", action = "store_true", help = "Save plot to pdf")
     args = parser.parse_args()
