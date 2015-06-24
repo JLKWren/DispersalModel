@@ -13,13 +13,6 @@ from random import seed, random
 seed()
 
 
-# uses new code to replace bathy check with simple query of current field
-# uses newer bathy file from Johanna, does 5km radius, and skips days not of interest.
-# mod from goby1b, this does Ed's simulation, note the out of bounds settings were obsolete and wrong, no harm I think but cluttered screen bounds
-# mod from 1A, this is for MacPro desktop, check mem limits...
-# this does part of the second year...
-# modified from post-crash version of hycom4x.tru which came from MyBook...
-# This does goby simulation with streams source/sink
 # ============
 # tried 15km radius instead of "default" 25km
 # mod from hycom3.tru to look at additional years and use less diffusivity.
@@ -42,10 +35,10 @@ minPLD = 10
 arraystart = 122
 arrayend = 250
 ntotal = 10
-releasesites = 670
-londim = 876 # 501 for 8km HYCOM
-latdim = 501 # 376 for 8km HYCOM
-resolution= 0.04
+releasesites = 876
+londim = 501
+latdim = 376
+resolution= 0.08
 lonmin= 175
 lonmax= 210
 latmin= 15
@@ -288,7 +281,7 @@ with open ("HIreefs.csv", "r") as file3:
 # Note that ALL array indexing is now on a julian style from 1=1/1/2009
 # Simple count index starts at 1 for 5/2/2009 (122 julian) 
 print "Reading daily HYCOM currents..."
-with open("files_HA4km.csv", "r") as file1:
+with open(currents_csv, "r") as file1:
     for ijk in xrange(arraystart, arrayend + 1):
         line = file1.readline()
         xfile = line.split(",")[0]
@@ -297,8 +290,8 @@ with open("files_HA4km.csv", "r") as file1:
 
 for ijk in xrange(arraystart, arrayend + 1):
     print ijk
-    ufile = "/media/jwren/Johanna/MITgcm/4kmHAregrid/" + myFile[ijk] + "_50m_u.txt"
-    vfile = "/media/jwren/Johanna/MITgcm/4kmHAregrid/" + myFile[ijk] + "_50m_v.txt"
+    ufile = currents_data_dir + myFile[ijk] + currents_u_suffix
+    vfile = currents_data_dir + myFile[ijk] + currents_v_suffix
     if(not exists(ufile)):
         print >> sys.stderr, "FILE ERROR: %s does not exist"%(ufile)
         continue
@@ -317,8 +310,8 @@ for ijk in xrange(arraystart, arrayend + 1):
 # This is tha part that actually initiates all the subroutines and initiates the simulation
 # It is also responsible for opening output files and closing them after the simulation is done
 for startsite in xrange(1, releasesites + 1):
-    #outputfile_endpoint = "/home/jwren/Desktop/Goby2/Goby_ocn_only_enpoint_site" + str(startsite) + ".txt"
-    outputfile = "/home/jwren/Desktop/test/Dispersal_python_4kmHA_test50m_site_" + str(startsite) + ".txt"
+    #outputfile_endpoint = output_prefix_total + str(startsite) + ".txt" # Total settlemetn file. Comment out if only want daily.
+    outputfile = outut_prefix_daily + str(startsite) + ".txt"
     with open(outputfile, 'w') as file5:  #open(outputfile_endpoint, 'w') as file2,
         print startsite
         startlon = habilon[startsite]

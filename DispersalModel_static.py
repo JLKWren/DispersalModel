@@ -13,23 +13,9 @@ from random import seed, random
 seed()
 
 
-# uses new code to replace bathy check with simple query of current field
-# uses newer bathy file from Johanna, does 5km radius, and skips days not of interest.
-# mod from goby1b, this does Ed's simulation, note the out of bounds settings were obsolete and wrong, no harm I think but cluttered screen bounds
-# mod from 1A, this is for MacPro desktop, check mem limits...
-# this does part of the second year...
-# modified from post-crash version of hycom4x.tru which came from MyBook...
-# This does goby simulation with streams source/sink
-# ============
-# tried 15km radius instead of "default" 25km
-# mod from hycom3.tru to look at additional years and use less diffusivity.
-# note the trajectory file has an additional record to indicate settled or not
-# Note that dimensioning and arraystart/arrayend values need updating if doing simulation for other time frames
-
-
 # GLOBAL STATIC VALUES 
 # Set these for all runns
-#PLD = (15,30,45,60,75)
+#PLD = (15,30,45,60,75)  # This is for looping over PLD's. Comment out if only running one PLD 
 duration = 45
 arraystart = 122 #956 #122
 arrayend = 1000 #1971
