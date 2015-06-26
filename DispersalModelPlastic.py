@@ -28,8 +28,8 @@ arraystart = 122
 arrayend = 130
 ntotal = 5
 releasesites = 687 
-londim = 501
-latdim = 376
+londim = 438
+latdim = 251
 resolution= 0.08
 lonmin= 175
 lonmax= 210
@@ -306,7 +306,7 @@ for ijk in xrange(arraystart, arrayend + 1):
 # It is also responsible for opening output files and closing them after the simulation is done
 for startsite in xrange(1, releasesites + 1):
     outputfile_endpoint = output_prefix_total + str(startsite) + ".txt" # Total settlemetn file. Comment out if only want daily.
-    outputfile = outut_prefix_daily + str(startsite) + ".txt"
+    outputfile = output_prefix_daily + str(startsite) + ".txt"
     with open(outputfile, 'w') as file5, open(outputfile_endpoint, 'w') as file2:
         print startsite
         startlon = habilon[startsite]
