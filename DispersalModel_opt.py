@@ -246,12 +246,12 @@ def main(args):
         for line, ijk in zip(file1, xrange(122, 2038 + 1)):
             #line = file1.readline()
             xfile = line.split(",")[0]
-            if arraystart <= ijk <= arrayend:
+            if args.arraystart <= ijk <= args.arrayend:
                 myFile[ijk] = xfile
 
     for ijk in xrange(args.arraystart, args.arrayend + 1):
-        ufile = os.path.join(args.data, "%s_evel.dat"%(myFile[ijk]))
-        vfile = os.path.join(args.data, "%s_nvel.dat"%(myFile[ijk]))
+        ufile = os.path.join(args.data, "%s_100m_u.txt"%(myFile[ijk]))
+        vfile = os.path.join(args.data, "%s_100m_v.txt"%(myFile[ijk]))
         # DLS
         # old program would try to use non-existant files if allowed.
         # not sure how it should really be handled, so for now print an error message,
@@ -267,7 +267,7 @@ def main(args):
                 for j in xrange(1, args.latdim + 1):
                     for i in xrange(1, args.londim + 1):
                         uval[ijk][i][j] = float(file3.readline())
-                        vval[ijk][i][j] =  float(file4.readline())
+                        vval[ijk][i][j] = float(file4.readline())
     del myFile
 
     with open(args.output, 'w') as file2:
@@ -286,7 +286,7 @@ def main(args):
 
 def parseArgs(argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter )
-    parser.add_argument("-l", "--locale", required = True, help ="Coastal fringe location file", type = str)
+    parser.add_argument("-l", "--locale", required = True, help ="Habitat location file", type = str)
     parser.add_argument("-i", "--island", required = True, help ="Island data file", type = str)
     parser.add_argument("-e", "--eez", required = True, help ="EEZ data file", type = str)
     parser.add_argument("-c", "--currents", required = True, help ="Daily HYCOM currents file csv", type = str)
@@ -297,14 +297,14 @@ def parseArgs(argv):
     parser.add_argument("-s", "--arraystart", default = 122, help ="Start of analysis period", type = int)
     parser.add_argument("-n", "--arrayend", default = 626, help ="End of analysis period", type = int)
     parser.add_argument("-r", "--runs", default = 100, help ="Particles released per site per day", type = int)
-    parser.add_argument("-h", "--habitat", required = True, help ="Number of habitat pixels", type = int) # JLKW added argument
+    parser.add_argument("-u", "--habitat", required = True, help ="Number of habitat pixels", type = int) # JLKW added argument
     parser.add_argument("-a", "--londim", required = True, help ="Longitude dimension", type = int)    # JLKW added argument
     parser.add_argument("-b", "--latdim", required = True, help ="Latitude dimension", type = int)    # JLKW added argument
     parser.add_argument("-f", "--lonmin", required = True, help ="Longitude min", type = int)    # JLKW added argument
     parser.add_argument("-g", "--lonmax", required = True, help ="Longitude max", type = int)    # JLKW added argument
     parser.add_argument("-j", "--latmin", required = True, help ="Latitude min", type = int)    # JLKW added argument
     parser.add_argument("-k", "--latmax", required = True, help ="Latitude max", type = int)    # JLKW added argument
-    parser.add_argument("-m", "--resolution", required = True, help ="Resolution of current file in km", type = int)    # JLKW added argument (values are decimals, should type=float? 
+    parser.add_argument("-m", "--resolution", required = True, help ="Resolution of current file in km", type = float)    # JLKW added argument 
 
     parser.add_argument("-p", "--plot", action = "store_true", help = "Save plot to pdf")
     args = parser.parse_args()

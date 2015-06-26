@@ -12,31 +12,30 @@ from random import seed, random
 # just to make sure we randomize the random function
 seed()
 
+
 # GLOBAL STATIC VALUES 
 # Set these for all runns
 reefs_csv = "HIreefsNew.csv"
 currents_csv = "files_HA8km.csv"
 currents_u_suffix = "_100m_u.txt"
 currents_v_suffix = "_100m_v.txt"
-currents_data_dir = "hawaii8km_/"
+currents_data_dir = "hawaii8km_/" #"hawaii8km_/"
 output_prefix_daily = "Dispersal_python_8kmHA_test_site_"
-output_prefix_total = "Dispersal_python_8kmHA_test_total"
-
-maxPLD = 5
-minPLD = 2
+output_prefix_total = "Dispersal_python_8kmHA_test_total.txt"
+#PLD = (15,30,45,60,75)  # This is for looping over PLD's. Comment out if only running one PLD 
+duration = 5
 arraystart = 122
 arrayend = 130
 ntotal = 5
-releasesites = 687 
-londim = 501
-latdim = 376
+releasesites = 687
 resolution= 0.08
-lonmin= 175
-lonmax= 210
-latmin= 15
-latmax= 35
+londim = 438
+latdim = 251
+lonmin = 175
+lonmax = 210
+latmin = 15
+latmax = 35
 
-# Fixed variables, do not change 
 la1 = -0.000003437984
 la2 = 0.0004652059
 la3 = -0.001507974
@@ -51,39 +50,24 @@ diffco = 0.00175
 sqrt_diffco = sqrt(diffco)
 EVEL_NVEL_ERR = -99
 
-#--------------------------------------------------- START OF SUBROUTINES ---------------------------------------
+#----------------------------------- START OF SUBROUTINES ---------------------------------------
 
-#### RELEASE FUNCTION STARTS THE TRANSPORT SIMULATION PROCESS#### 
+#### RELEASE FUNCTION STARTS THE TRANSPORT SIMULATION PROCESS #### 
 def release(xlon, xlat, startday, uval, vval):
     xflag1 = False
     xflag2 = False
-    xflag3 = False
-    global currentday  # added this so can use DAY when printing to file5 at end of script
-    '''add if loop if smaller than 51 days, keep going, if larger then check with Settle after every day.'''
-    for day in xrange(1, maxPLD + 1):
-        if day < minPLD:
-            if xflag1 == False:
-                currentday = startday + day
-                xlon, xlat = disperse(xlon, xlat, currentday, uval, vval)
-                xflag1 = checkbounds(xlon, xlat)
-                if day and xflag1 == False:
-                    xflag2 = checkdepth(xlon, xlat, currentday, uval, vval)
-            if xflag2 == True:
-                xlon, xlat = tweak(xlon, xlat, uval, vval, currentday) 
-            print >> file5,  "%s\t%s\t%s\t%s\t%s" % (startsite, day, currentday, xlon, xlat)
-        if day >= minPLD:
-            xflag3, dmindex = settle(xlon, xlat, uval, vval, habilon, habilat)
-            if xflag3 == False:
-                if xflag1 == False:
-                    currentday = startday + day
-                    xlon, xlat = disperse(xlon, xlat, currentday, uval, vval)
-                    xflag1 = checkbounds(xlon, xlat)
-                    if day and xflag1 == False:
-                        xflag2 = checkdepth(xlon, xlat, currentday, uval, vval)
-                if xflag2 == True:
-                    xlon, xlat = tweak(xlon, xlat, uval, vval, currentday) 
-            print >> file5,  "%s\t%s\t%s\t%s\t%s" % (startsite, day, currentday, xlon, xlat)
-    return xflag3, dmindex, xlon, xlat
+    global currentday
+    for day in xrange(1, duration + 1):
+        if xflag1 == False:
+            currentday = startday + day
+            xlon, xlat = disperse(xlon, xlat, currentday, uval, vval)
+            xflag1 = checkbounds(xlon, xlat)
+            if day < duration and xflag1 == False:
+                xflag2 = checkdepth(xlon, xlat, currentday, uval, vval)
+        if xflag2 == True:
+            xlon, xlat = tweak(xlon, xlat, uval, vval, currentday)
+        print >> file5,  "%s\t%s\t%s\t%s\t%s" % (startsite, day, currentday, xlon, xlat)
+    return xlon, xlat
 
 
 #### FUNCTION CALCULATING LAT AND LONG ####
@@ -153,6 +137,9 @@ def checkdepth(xlon, xlat, currentday, uval, vval):
         hycomu = uval[currentday][nnlon][nnlat]
         hycomv = vval[currentday][nnlon][nnlat]
         if hycomu == EVEL_NVEL_ERR or hycomv == EVEL_NVEL_ERR:
+            #print >> file9,  "%s\t%s\t%s\t%s\t%s" % (xlon, xlat, hycomu, hycomv, startday)  # added this for trouble shooting. 
+            #print xlon, xlat, uval, vval 
+            #print "is this working?"
             return  True
     return False
 
@@ -255,9 +242,9 @@ def plotFigure(infile1, infile2, title, output):
 myFile = {}
 uval = dict([ (y, [ [0.0]*(latdim + 1) for x in xrange(londim + 1)], ) for y in xrange(arraystart, arrayend + 1) ])
 vval = dict([ (y, [ [0.0]*(latdim + 1) for x in xrange(londim + 1)], ) for y in xrange(arraystart, arrayend + 1) ])
-habilon = [0.0]*(releasesites + 1)
-habilat = [0.0]*(releasesites + 1)
-island = [0.0]*(releasesites + 1) 
+habilon = [0.0]*(releasesites + 1) 
+habilat = [0.0]*(releasesites + 1) 
+island = [0.0]*(releasesites + 1)  
 propreef = [0.0]*(releasesites + 1)
 
 #### LOADING SETTLEMENT AND RELEASE HABITAT FROM FILE ####
@@ -266,7 +253,7 @@ with open (reefs_csv, "r") as file3:
     for ijk in xrange(1, releasesites + 1):
         habilat[ijk], habilon[ijk], propreef[ijk], island[ijk] = map(float, file3.readline().rstrip().split(","))
 
-#print "Reading Island data and EEZ data..."  
+#print "Reading Island data and EEZ data..."
 '''Commented this out because I don't need it right now, but would like for it to stay in the code for future use'''
 #plotFigure("MHI.csv", "HIFCZ.csv","Island & EEZ Data", "output")
 
@@ -299,25 +286,29 @@ for ijk in xrange(arraystart, arrayend + 1):
                 for i in xrange(1, londim + 1):
                     uval[ijk][i][j] = float(file3.readline())
                     vval[ijk][i][j] =  float(file4.readline())
-
+    
 
 #### STARTS THE DIFFERENT FUCTIONS AND THE TRANSPORT SIMULATION ####
 # This is tha part that actually initiates all the subroutines and initiates the simulation
 # It is also responsible for opening output files and closing them after the simulation is done
-for startsite in xrange(1, releasesites + 1):
-    outputfile_endpoint = output_prefix_total + str(startsite) + ".txt" # Total settlemetn file. Comment out if only want daily.
-    outputfile = outut_prefix_daily + str(startsite) + ".txt"
-    with open(outputfile, 'w') as file5, open(outputfile_endpoint, 'w') as file2:
-        print startsite
-        startlon = habilon[startsite]
-        startlat = habilat[startsite]
-        for startday in xrange(arraystart, arrayend - maxPLD + 1):
-            for nrun in xrange(ntotal): 
-                xflag3, dmindex, xlon, xlat = release(startlon, startlat, startday, uval, vval)
-                if xflag3 and dmindex:
-                    print >> file5,  "%s\t%s\t%s\t%s\t%s" % (startsite, dmindex, currentday, xlon, xlat)
-                if xflag3 == False:
-                    test = 0
-                    print >> file5,  "%s\t%s\t%s\t%s\t%s" % (startsite, test, currentday, xlon, xlat)
+outputfile = output_prefix_total
+with open(outputfile, 'w') as file2 :
+    #for idx, duration in enumerate(PLD):
+        for startsite in xrange(1, releasesites + 1):
+            outputfile5= output_prefix_daily + str(startsite) + "_daily_1.txt"
+            with open(outputfile5, 'w') as file5 :              
+                print startsite
+                #print duration
+                startlon = habilon[startsite]
+                startlat = habilat[startsite]
+                for startday in xrange(arraystart, arrayend - duration + 1):
+                    for nrun in xrange(ntotal): 
+                        endlon, endlat = release(startlon, startlat, startday, uval, vval)
+                        xflag3, dmindex = settle(endlon, endlat, uval, vval, habilon, habilat)
+                        if xflag3 and dmindex:
+                            test = 0
+                            print >> file2,  "%s\t%s\t%s\t%s\t%s" % (startsite, startday, dmindex, island[startsite], island[dmindex])
+                            print >> file5,  "%s\t%s\t%s\t%s\t%s" % (startsite, currentday, test, endlon, endlat)
+
 
 
