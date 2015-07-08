@@ -28,7 +28,6 @@ data(hawaii)                 # Loads bathymetry for Hawaii
 Sites <- read.table(infile, header=F)  # loads the output file. Can take some time depending on the size of the file.
 head(Sites)
 Sites[,4] <- Sites[,4]-360   # Changes longitude to degrees West (originally in deg E) for plotting
-col.na
 sites <- cbind(Sites[,4]-360, Sites[,5])  # makes subset of lat and lon, and converts lon to degrees West (from deg E)
 head(sites)
 
