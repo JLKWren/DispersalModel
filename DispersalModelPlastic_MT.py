@@ -320,6 +320,7 @@ def createDatabase(args):
     con.commit()
     return con
 
+
 def removeDatabase(args):
     # remove and old sqlite database, since we dont want it around  
     try:
@@ -333,6 +334,7 @@ def dayStep(cv, cu, nv, nu, step):
     ustep =  (nu - cu) / float(step)
     return vstep, ustep
 
+
 def readinUandVfiles(con, args):
     """
     The currents_csv file already contains the julian date value.  This means we do not need to hard code
@@ -341,7 +343,8 @@ def readinUandVfiles(con, args):
     """
     print "Reading daily HYCOM currents..."
     # dangerous in the case we care about the database in that it could get corrupt with power loss. 
-    con.execute("""PRAGMA synchronous = OFF;""")
+    #con.execute("""PRAGMA synchronous = OFF;""")
+    #con.execute("""PRAGMA journal_mode = OFF;""");
 
     #### READING IN CURRENT SOLUTIONS ####
     # This reads in the 365 days of HYCOM currents from Yanli as parsed to ascii by Evan and regridded by Don
@@ -349,20 +352,21 @@ def readinUandVfiles(con, args):
     # Simple count index starts at 1 for 5/2/2009 (122 julian) 
     startdatestamp = datetime(year = 2009, month = 1, day = 1)
     step = 0
-    startDate = None
+    firstDate = None
     with open(args.currents_csv, "r") as currentFile:
         for line in currentFile:
             xfile, index, julian = line.split(",")
             julian = int(julian)
             if args.arraystart > julian or args.arrayend < julian:
                 continue
+                
             ufile, vfile = getUandVFile(args.currents_data_dir, xfile, args.currents_u_suffix, args.currents_v_suffix)
             # If the ufile or vfile doesn't not exist, we can't really continue adding it to the database..
             # Therefore, skip over it and move on to the next file.
             if not ufile or not vfile:
                 continue
-            if not startDate:
-                startDate = startdatestamp + timedelta(days = (julian - 1))
+            if not firstDate:
+                firstDate = startdatestamp + timedelta(days = (julian - 1))
             cdate = startdatestamp + timedelta(days = (julian - 1))
             cdate = cdate.isoformat()
             print cdate
@@ -373,34 +377,34 @@ def readinUandVfiles(con, args):
                     # prepare for a bulk insert into the database
                     for j in xrange(1, args.latdim + 1): 
                         for i in xrange(1, args.londim + 1):
-                            vudat.append( (step, j, i, float(vfilep.readline()), float(ufilep.readline())) )
+                            #vudat.append( (step, j, i, float(vfilep.readline()), float(ufilep.readline()), cdate, ) )
+                            vudat.append( (step, j, i, float(vfilep.readline()), float(ufilep.readline()),) )
                                 #vudat.append( (julian, j, i, float(vfilep.readline()), float(ufilep.readline()), ) )
                     # need to verify the practical limits of executemany.. in which case we might need to fall back to plain execute()
                     con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u) VALUES(?, ?, ?, ?, ?)""", vudat)
+                    #con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u, tstamp) VALUES(?, ?, ?, ?, ?, ?)""", vudat)
             
             step += args.total_steps
     if args.total_steps != 1:
         print "Begin Interpolation"
-        con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u, tstamp) VALUES(?, ?, ?, ?, ?, ?)""", stepGenerator(con, args, step) )
+        con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u) VALUES(?, ?, ?, ?, ?)""", stepGenerator(con, args, step) )
+        #con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u, tstamp) VALUES(?, ?, ?, ?, ?, ?)""", stepGenerator(con, args, step) )
         print "\nEnd Interpolation"
     con.commit()
     args.arrayend = ((args.arrayend - args.arraystart) * args.total_steps) + 1
     args.arraystart = 0
-    #con.execute("""VACUUM;""")    
-    con.execute("""PRAGMA query_only = 1;""")
-    con.execute("""PRAGMA synchronous = OFF;""")
-    con.execute("""PRAGMA journal_mode = OFF;""")
-    con.execute("""PRAGMA cache_size = 20000;""")
-    con.execute("""PRAGMA locking_mode = EXCLUSIVE;""")
+    con.execute("""PRAGMA synchronous = ON;""")
+    #con.execute("""VACUUM;""")
     con.commit()
     print "Done."
-    return startDate
+    return firstDate
+
 
 def stepGenerator(con, args, step):
     cur = con.cursor()
     for i, j in zip(xrange(0, step, args.total_steps), xrange(args.total_steps, step, args.total_steps)):
         sys.stderr.write(".")
-        for row in list(cur.execute("""SELECT a.lat as clat, b.lon as clon, a.v AS cv, a.u AS cu, b.v AS nv, b.u AS nu FROM uvvals AS a JOIN uvvals AS b ON (a.lat = b.lat AND a.lon = b.lon) WHERE a.step =? AND b.step = ?;""", (i, j,))):
+        for row in list(cur.execute("""SELECT a.lat as clat, b.lon as clon, a.v AS cv, a.u AS cu, b.v AS nv, b.u AS nu FROM uvvals AS a JOIN uvvals AS b ON (a.lat = b.lat AND a.lon = b.lon) WHERE a.step = ? AND b.step = ?;""", (i, j,))):
             lat = row[0]
             lon = row[1]
             cv = row[2]
@@ -413,8 +417,46 @@ def stepGenerator(con, args, step):
             for x in xrange(1, args.total_steps):                
                 cv += vstep
                 cu += ustep
-                yield (i+x, lat, lon, cv, cu, )
+                yield (i+x, lat, lon, cv, cu,)
 
+
+def processData(allargs):
+    args, habilon, habilat, startsite, timeslice, offset, start, end = allargs
+    if args.rng_seed != None:
+        seed(args.rng_seed)
+
+    con = sqlite3.connect(args.database_loc, check_same_thread = False)
+    con.execute("""PRAGMA query_only = 1;""")
+    con.execute("""PRAGMA synchronous = OFF;""")
+    con.execute("""PRAGMA journal_mode = OFF;""")
+    con.execute("""PRAGMA cache_size = 20000;""")
+    con.execute("""PRAGMA locking_mode = EXCLUSIVE;""")
+    outputfile_endpoint = None
+    if args.output_prefix_total:
+        outputfile_endpoint = args.output_prefix_total + str(startsite) + ".txt" # Total settlement file. Comment out if only want daily.
+    outputfile = args.output_prefix_daily + str(startsite) + ".txt"
+    with open(outputfile, 'w') as daily:
+        totout = None
+        if outputfile_endpoint:
+            totout = open(outputfile_endpoint, "w")
+        startlon = habilon[startsite]
+        startlat = habilat[startsite]
+        stime = datetime.now()
+        startstamp = offset
+        for step in xrange(end):
+            for nrun in xrange(args.ntotal):
+                xflag3, dmindex, xlon, xlat, currentdate = release(args, startlon, startlat, step, con, habilon, habilat, startsite, daily, startstamp, timeslice)
+                if xflag3 and dmindex:
+                    print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, dmindex, currentdate.isoformat(), xlon, xlat)
+                if xflag3 == False:
+                    print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, 0, currentdate.isoformat(), xlon, xlat)
+            startstamp = startstamp + timeslice
+        etime = datetime.now()
+        print etime - stime
+        if totout:
+            totout.close()
+    con.close()
+    return None
 
 #@profile
 def main():
@@ -435,6 +477,7 @@ def main():
         for ijk in xrange(1, args.releasesites + 1):
             habilat[ijk], habilon[ijk], propreef, island = map(float, file3.readline().rstrip().split(","))
             #habilat[ijk], habilon[ijk], propreef[ijk], island[ijk] = map(float, file3.readline().rstrip().split(","))
+            
 
     '''Commented this out because I don't need it right now, but would like for it to stay in the code for future use'''
     #print "Reading Island data and EEZ data..."  
@@ -444,42 +487,18 @@ def main():
     con = createDatabase(args)
     # read in all our input files into the database
     offset = readinUandVfiles(con, args)
-    
+
     #### STARTS THE DIFFERENT FUCTIONS AND THE TRANSPORT SIMULATION ####
     # This is tha part that actually initiates all the subroutines and initiates the simulation
     # It is also responsible for opening output files and closing them after the simulation is done
     start = args.arraystart
     end = args.arrayend - args.maxPLD #+ 1
     timeslice = timedelta(hours = 24.0 / float(args.total_steps) )
-    for startsite in xrange(1, args.releasesites + 1):
-        outputfile_endpoint = None
-        if args.output_prefix_total:
-            outputfile_endpoint = args.output_prefix_total + str(startsite) + ".txt" # Total settlemetn file. Comment out if only want daily.
-        outputfile = args.output_prefix_daily + str(startsite) + ".txt"
-        with open(outputfile, 'w') as daily:
-            totout = None
-            if outputfile_endpoint:
-                totout = open(outputfile_endpoint, "w")
 
-            startlon = habilon[startsite]
-            startlat = habilat[startsite]
-
-            #stime = datetime.now()
-            startstamp = offset
-            for step in xrange(end):
-                for nrun in xrange(args.ntotal):
-                    xflag3, dmindex, xlon, xlat, currentdate = release(args, startlon, startlat, step, con, habilon, habilat, startsite, daily, startstamp, timeslice)
-                    if xflag3 and dmindex:
-                        print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, dmindex, currentdate.isoformat(), xlon, xlat)
-                    if xflag3 == False:
-                        print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, 0, currentdate.isoformat(), xlon, xlat)
-                startstamp = startstamp + timeslice
-
-            #etime = datetime.now()
-            #print etime - stime
-            if totout:
-                totout.close()
-    con.close()
+    pool = Pool(processes = args.processes)
+    dat = pool.imap_unordered(processData, ( (args, habilon, habilat, startsite, timeslice, offset, start, end,) for startsite in xrange(1, args.releasesites + 1) ) )
+    for p in dat:
+        continue
     removeDatabase(args)
 
 
@@ -520,6 +539,7 @@ def parseArgs(argv):
     parser.add_argument("-x", "--rng_seed", default = None, help ="Set a static seed value for random", type = int)    
 
     parser.add_argument("-i", "--total_steps", default = 1, help ="How many steps in a given day >=1", type = int) # delete/comment
+    parser.add_argument("-p", "--processes", default = 1, help = "Number of threads to use", type = int) #delete/comment    
     #parser.add_argument("-e", "--eez", required = True, help ="EEZ data file", type = str) # delete/commnt
     #parser.add_argument("-p", "--plot", action = "store_true", help = "Save plot to pdf") #delete/comment
     parser.set_defaults(TIME_CONVERSION=60*60*24)
