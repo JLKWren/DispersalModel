@@ -381,7 +381,7 @@ def readinUandVfiles(con, args):
             step += args.total_steps
     if args.total_steps != 1:
         print "Begin Interpolation"
-        con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u, tstamp) VALUES(?, ?, ?, ?, ?, ?)""", stepGenerator(con, args, step) )
+        con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u) VALUES(?, ?, ?, ?, ?)""", stepGenerator(con, args, step) )
         print "\nEnd Interpolation"
     con.commit()
     args.arrayend = ((args.arrayend - args.arraystart) * args.total_steps) + 1
