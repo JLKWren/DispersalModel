@@ -421,7 +421,7 @@ def stepGenerator(con, args, step):
 
 
 def processData(allargs):
-    args, habilon, habilat, startsite, timeslice, offset, start, end, islands = allargs
+    args, habilon, habilat, startsite, timeslice, offset, start, end, island = allargs
     if args.rng_seed != None:
         seed(args.rng_seed)
 
@@ -448,6 +448,7 @@ def processData(allargs):
                 xflag3, dmindex, xlon, xlat, currentdate = release(args, startlon, startlat, step, con, habilon, habilat, startsite, daily, startstamp, timeslice)
                 if xflag3 and dmindex:
                     print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, dmindex, currentdate.isoformat(), xlon, xlat)
+		    print >> totout,  "%s\t%s\t%s\t%s\t%s" % (startsite, startstamp, dmindex, island[startsite], island[dmindex])
                 if xflag3 == False:
                     print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, 0, currentdate.isoformat(), xlon, xlat)
             startstamp = startstamp + timeslice
