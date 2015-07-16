@@ -421,7 +421,7 @@ def stepGenerator(con, args, step):
 
 
 def processData(allargs):
-    args, habilon, habilat, startsite, timeslice, offset, start, end = allargs
+    args, habilon, habilat, startsite, timeslice, offset, start, end, islands = allargs
     if args.rng_seed != None:
         seed(args.rng_seed)
 
@@ -468,14 +468,14 @@ def main():
     # DLS - attempted to add this to the sqliteDB, but didn't really help speed, and the amount of memory savings is minimal..
     habilon = [0.0]*(args.releasesites + 1)
     habilat = [0.0]*(args.releasesites + 1)
-    #island = [0.0]*(args.releasesites + 1)  ## DLS - Not used?
-    #propreef = [0.0]*(args.releasesites + 1) ## DLS - Not used?
+    island = [0.0]*(args.releasesites + 1)  ## DLS - Not used?
+    propreef = [0.0]*(args.releasesites + 1) ## DLS - Not used?
 
     #### LOADING SETTLEMENT AND RELEASE HABITAT FROM FILE ####
     print "Reading habitat file..."
     with open (args.reefs_csv, "r") as file3:
         for ijk in xrange(1, args.releasesites + 1):
-            habilat[ijk], habilon[ijk], propreef, island = map(float, file3.readline().rstrip().split(","))
+            habilat[ijk], habilon[ijk], propreef[ijk], island[ijk] = map(float, file3.readline().rstrip().split(","))
             #habilat[ijk], habilon[ijk], propreef[ijk], island[ijk] = map(float, file3.readline().rstrip().split(","))
             
 
@@ -496,7 +496,7 @@ def main():
     timeslice = timedelta(hours = 24.0 / float(args.total_steps) )
 
     pool = Pool(processes = args.processes)
-    dat = pool.imap_unordered(processData, ( (args, habilon, habilat, startsite, timeslice, offset, start, end,) for startsite in xrange(1, args.releasesites + 1) ) )
+    dat = pool.imap_unordered(processData, ( (args, habilon, habilat, startsite, timeslice, offset, start, end, island) for startsite in xrange(1, args.releasesites + 1) ) )
     for p in dat:
         continue
     removeDatabase(args)
