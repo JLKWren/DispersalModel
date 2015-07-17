@@ -34,7 +34,7 @@ EVEL_NVEL_ERR = -99
 
 
 #### RELEASE FUNCTION STARTS THE TRANSPORT SIMULATION PROCESS#### 
-def release(args, xlon, xlat, startstep, con, habilon, habilat, startsite, daily, startdate, timeslice):
+def release(args, xlon, xlat, startstep, con, habilon, habilat, startsite, all_output, startdate, timeslice):
     xflag1 = False
     xflag2 = False
     xflag3 = False
@@ -43,14 +43,14 @@ def release(args, xlon, xlat, startstep, con, habilon, habilat, startsite, daily
     dmindex = None
     prevxlon = None
     prevxlat = None
-    '''add if loop if smaller than 51 days, keep going, if larger then check with Settle after every day.'''
+
     for step in xrange(1, args.maxPLD + 1):
         currentdate = currentdate + timeslice
         if step < args.minPLD:
             xflag3 = False
         else: #elif step >= args.minPLD:
             # DLS - Settle does not change if we have the same lon/lat... 
-            # simple storage of the previous lat/lon should reduce unneeded computation calls for test show about a 50% call reduction
+            # simple storage of the previous lat/lon should reduce unneeded computation calls.  Small test shows about a 50% call reduction.
             if xlon != prevxlon or xlat != prevxlat:
                 xflag3, dmindex = settle(args, xlon, xlat, habilon, habilat)
                 prevxlon = xlon
@@ -58,7 +58,6 @@ def release(args, xlon, xlat, startstep, con, habilon, habilat, startsite, daily
         if xflag3 == False:
             if xflag1 == False:
                 currentstep = startstep + step
-                #print currentstep, startstep, step
                 xlon, xlat = disperse(args, xlon, xlat, currentstep, con)
                 xflag1 = checkbounds(args, xlon, xlat)
                 if xflag1 == False:
@@ -66,13 +65,13 @@ def release(args, xlon, xlat, startstep, con, habilon, habilat, startsite, daily
             if xflag2 == True:
                 xlon, xlat = tweak(args, xlon, xlat, con, currentstep) 
         
-        print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, step, currentdate.isoformat(), xlon, xlat)
+        print >> all_output,  "%s\t%s\t%s\t%s\t%s" % (startsite, step, currentdate.isoformat(), xlon, xlat)
     return xflag3, dmindex, xlon, xlat, currentdate
 
 
 def computeKMLatLon(avglat):
     """
-    Pull out the calculation for the zkmlat and zkmlon since it is used in at least 2 locations.
+    Pulled out the calculation for the zkmlat and zkmlon since it is used in at least 2 locations.
     Function call overhead isn't really an issue yet, so manual inlining is not required
     """
     la1 = -0.000003437984
@@ -298,6 +297,10 @@ def getUandVFile(pth, prefix, u_suffix, v_suffix):
 
 
 def createDatabase(args):
+    """
+    Remove any database that matches the one we plan to use, and then create a new database.
+    In the case, we do not have a recent version of sqlite, we need to fall back to a version that has a ROWID on the rows.
+    """
     # remove and old sqlite database, since we dont want it around
     removeDatabase(args)
     con = sqlite3.connect(args.database_loc, check_same_thread = False)
@@ -327,12 +330,6 @@ def removeDatabase(args):
         os.remove(args.database_loc)
     except:
         pass
-
-
-def dayStep(cv, cu, nv, nu, step):
-    vstep = (nv - cv) / float(step)
-    ustep =  (nu - cu) / float(step)
-    return vstep, ustep
 
 
 def readinUandVfiles(con, args):
@@ -377,20 +374,17 @@ def readinUandVfiles(con, args):
                     # prepare for a bulk insert into the database
                     for j in xrange(1, args.latdim + 1): 
                         for i in xrange(1, args.londim + 1):
-                            #vudat.append( (step, j, i, float(vfilep.readline()), float(ufilep.readline()), cdate, ) )
                             vudat.append( (step, j, i, float(vfilep.readline()), float(ufilep.readline()),) )
-                                #vudat.append( (julian, j, i, float(vfilep.readline()), float(ufilep.readline()), ) )
                     # need to verify the practical limits of executemany.. in which case we might need to fall back to plain execute()
                     con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u) VALUES(?, ?, ?, ?, ?)""", vudat)
-                    #con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u, tstamp) VALUES(?, ?, ?, ?, ?, ?)""", vudat)
-            
             step += args.total_steps
+
     if args.total_steps != 1:
         print "Begin Interpolation"
         con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u) VALUES(?, ?, ?, ?, ?)""", stepGenerator(con, args, step) )
-        #con.executemany("""INSERT INTO uvvals(step, lat, lon, v, u, tstamp) VALUES(?, ?, ?, ?, ?, ?)""", stepGenerator(con, args, step) )
         print "\nEnd Interpolation"
     con.commit()
+
     args.arrayend = ((args.arrayend - args.arraystart) * args.total_steps) + 1
     args.arraystart = 0
     con.execute("""PRAGMA synchronous = ON;""")
@@ -401,9 +395,13 @@ def readinUandVfiles(con, args):
 
 
 def stepGenerator(con, args, step):
+    """
+    A generator function that we use to interpolate the current changes during a day in a given time step.
+    """
     cur = con.cursor()
     for i, j in zip(xrange(0, step, args.total_steps), xrange(args.total_steps, step, args.total_steps)):
         sys.stderr.write(".")
+        # DLS - We need to use list() since it seems sqlite cant handle an open cursor on a table we are inserting more data..
         for row in list(cur.execute("""SELECT a.lat as clat, b.lon as clon, a.v AS cv, a.u AS cu, b.v AS nv, b.u AS nu FROM uvvals AS a JOIN uvvals AS b ON (a.lat = b.lat AND a.lon = b.lon) WHERE a.step = ? AND b.step = ?;""", (i, j,))):
             lat = row[0]
             lon = row[1]
@@ -421,6 +419,10 @@ def stepGenerator(con, args, step):
 
 
 def processData(allargs):
+    """
+    This is the function that each thread in the pool executes.  each call of this function process for a single start site.
+    It calls the release function, and generates output files on a daily/timestep basis
+    """
     args, habilon, habilat, startsite, timeslice, offset, start, end, island = allargs
     if args.rng_seed != None:
         seed(args.rng_seed)
@@ -434,26 +436,27 @@ def processData(allargs):
     outputfile_endpoint = None
     if args.output_prefix_total:
         outputfile_endpoint = args.output_prefix_total + str(startsite) + ".txt" # Total settlement file. Comment out if only want daily.
-    outputfile = args.output_prefix_daily + str(startsite) + ".txt"
-    with open(outputfile, 'w') as daily:
+    outputfile = args.output_prefix_all + str(startsite) + ".txt"
+    with open(outputfile, 'w') as all_output:
         totout = None
         if outputfile_endpoint:
             totout = open(outputfile_endpoint, "w")
         startlon = habilon[startsite]
         startlat = habilat[startsite]
-        stime = datetime.now()
+        #stime = datetime.now()
         startstamp = offset
         for step in xrange(end):
             for nrun in xrange(args.ntotal):
-                xflag3, dmindex, xlon, xlat, currentdate = release(args, startlon, startlat, step, con, habilon, habilat, startsite, daily, startstamp, timeslice)
+                xflag3, dmindex, xlon, xlat, currentdate = release(args, startlon, startlat, step, con, habilon, habilat, startsite, all_output, startstamp, timeslice)
                 if xflag3 and dmindex:
-                    print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, dmindex, currentdate.isoformat(), xlon, xlat)
-		    print >> totout,  "%s\t%s\t%s\t%s\t%s" % (startsite, startstamp, dmindex, island[startsite], island[dmindex])
+                    print >> all_output,  "%s\t%s\t%s\t%s\t%s" % (startsite, dmindex, currentdate.isoformat(), xlon, xlat)
+                    if totout:
+                        print >> totout,  "%s\t%s\t%s\t%s\t%s" % (startsite, startstamp, dmindex, island[startsite], island[dmindex])
                 if xflag3 == False:
-                    print >> daily,  "%s\t%s\t%s\t%s\t%s" % (startsite, 0, currentdate.isoformat(), xlon, xlat)
+                    print >> all_output,  "%s\t%s\t%s\t%s\t%s" % (startsite, 0, currentdate.isoformat(), xlon, xlat)
             startstamp = startstamp + timeslice
-        etime = datetime.now()
-        print etime - stime
+        #etime = datetime.now()
+        #print etime - stime
         if totout:
             totout.close()
     con.close()
@@ -489,9 +492,7 @@ def main():
     # read in all our input files into the database
     offset = readinUandVfiles(con, args)
 
-    #### STARTS THE DIFFERENT FUCTIONS AND THE TRANSPORT SIMULATION ####
-    # This is tha part that actually initiates all the subroutines and initiates the simulation
-    # It is also responsible for opening output files and closing them after the simulation is done
+
     start = args.arraystart
     end = args.arrayend - args.maxPLD #+ 1
     timeslice = timedelta(hours = 24.0 / float(args.total_steps) )
@@ -499,8 +500,9 @@ def main():
     pool = Pool(processes = args.processes)
     dat = pool.imap_unordered(processData, ( (args, habilon, habilat, startsite, timeslice, offset, start, end, island) for startsite in xrange(1, args.releasesites + 1) ) )
     for p in dat:
-        continue
+        sys.stderr.write(".")
     removeDatabase(args)
+    print "\nDone"
 
 
 def parseArgs(argv):
@@ -515,7 +517,7 @@ def parseArgs(argv):
     parser.add_argument("-u", "--currents_u_suffix", required = True , help ="u file suffix", type = str)
     parser.add_argument("-v", "--currents_v_suffix", required = True, help ="v file suffix", type = str)
 
-    parser.add_argument("-o", "--output_prefix_daily", required = True, help ="daily output path prefix (example: ./out/Dispersal_python_8kmHA_test_site_ )", type = str)
+    parser.add_argument("-o", "--output_prefix_all", required = True, help ="all timestep output path prefix (example: ./out/Dispersal_python_8kmHA_test_site_ )", type = str)
     parser.add_argument("-e", "--output_prefix_total", default = None, help ="total output path prefix (example: ./out/Dispersal_python_8kmHA_test_site_total )", type = str)
 
     parser.add_argument("-t", "--minPLD", default = 2, help ="min PLD in steps", type = int)
