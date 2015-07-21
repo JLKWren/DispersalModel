@@ -14,7 +14,7 @@ from random import seed, random
 import sqlite3
 import argparse
 from datetime import datetime, timedelta
-import dateutil.parser
+#import dateutil.parser
 #from tmepfile import NamedTemporaryFile
 from multiprocessing import Pool
 
